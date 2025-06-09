@@ -59,13 +59,13 @@ const RegisterScreen = ({ navigation }) => {
         {/* Íconos sociales */}
         <View style={styles.socialRow}>
           <TouchableOpacity style={styles.socialButton}>
-            <Image source={require('./assets/X_logo.png')} style={styles.socialIcon} />
+            <Image source={require('./assets/X_Logo.png')} style={styles.socialIcon} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.socialButton}>
-            <Image source={require('./assets/Google_logo.png')} style={styles.socialIcon} />
+            <Image source={require('./assets/Google_Logo.png')} style={styles.socialIcon} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.socialButton}>
-            <Image source={require('./assets/Facebook_logo.png')} style={styles.socialIcon} />
+            <Image source={require('./assets/Facebook_Logo.png')} style={styles.socialIcon} />
           </TouchableOpacity>
         </View>
 

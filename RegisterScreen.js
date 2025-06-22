@@ -1,11 +1,91 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  SafeAreaView,
+  Alert,
+  ActivityIndicator,
+  FlatList,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import supabase from './lib/supabase';
 
 const RegisterScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [testData, setTestData] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // 🔍 Verifica conexión con Supabase y muestra datos
+  useEffect(() => {
+    const fetchTestData = async () => {
+      const { data, error } = await supabase.from('usuario').select('*');
+      if (error) {
+        console.error('Error al cargar datos:', error.message);
+      } else {
+        setTestData(data);
+      }
+      setLoadingData(false);
+    };
+    fetchTestData();
+  }, []);
+
+  const handleRegister = async () => {
+    const emailTrimmed = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  
+    if (!emailTrimmed || !password) {
+      Alert.alert('Error', 'Por favor completa todos los campos.');
+      return;
+    }
+  
+    if (!emailRegex.test(emailTrimmed)) {
+      Alert.alert('Error', 'El email ingresado no es válido.');
+      return;
+    }
+  
+    setLoading(true);
+  
+    try {
+      // 1. Crear usuario en Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: emailTrimmed,
+        password: password,
+      });
+  
+      if (error) throw error;
+  
+      // 2. Obtener el ID del nuevo usuario
+      const userId = data.user?.id;
+      if (!userId) throw new Error("No se pudo obtener el ID del usuario");
+  
+      // 3. Insertar datos personalizados en tabla "usuario"
+      const { error: dbError } = await supabase.from('usuario').insert([
+        {
+          mail: emailTrimmed,
+          // Agregá aquí más campos si los pedís en el formulario (nombreUser, idEstilo, etc.)
+        },
+      ]);
+  
+      if (dbError) throw dbError;
+  
+      Alert.alert('¡Registro exitoso!', 'Revisa tu correo para confirmar tu cuenta.');
+      navigation.replace('Home');
+    } catch (err) {
+      console.error('Registro fallido:', err.message);
+      Alert.alert('Error', err.message || 'Error al registrar');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -31,6 +111,7 @@ const RegisterScreen = ({ navigation }) => {
           keyboardType="email-address"
           autoCapitalize="none"
         />
+
         <View style={styles.passwordContainer}>
           <TextInput
             style={[styles.input, { flex: 1, marginBottom: 0 }]}
@@ -41,10 +122,7 @@ const RegisterScreen = ({ navigation }) => {
             secureTextEntry={!showPassword}
             autoCapitalize="none"
           />
-          <TouchableOpacity
-            style={styles.eyeIcon}
-            onPress={() => setShowPassword((prev) => !prev)}
-          >
+          <TouchableOpacity style={styles.eyeIcon} onPress={() => setShowPassword((prev) => !prev)}>
             <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color="#888" />
           </TouchableOpacity>
         </View>
@@ -69,9 +147,29 @@ const RegisterScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* 🔍 Verificación conexión a Supabase */}
+        <View style={{ marginTop: 10, marginBottom: 20 }}>
+          <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 4 }}>Datos desde Supabase:</Text>
+          {loadingData ? (
+            <ActivityIndicator size="small" color="#000" />
+          ) : (
+            <FlatList
+              data={testData}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => (
+                <Text style={{ fontSize: 12, marginBottom: 4 }}>{JSON.stringify(item)}</Text>
+              )}
+            />
+          )}
+        </View>
+
         {/* Botón registrarse */}
-        <TouchableOpacity style={styles.registerButton}>
-          <Text style={styles.registerButtonText}>Registrarse</Text>
+        <TouchableOpacity
+          style={styles.registerButton}
+          onPress={handleRegister}
+          disabled={loading}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.registerButtonText}>Registrarse</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -193,7 +291,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
-  },
-});
+  },});
 
-export default RegisterScreen; 
+export default RegisterScreen;

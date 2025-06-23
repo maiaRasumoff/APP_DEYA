@@ -8,8 +8,6 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 // Simula datos de usuario
 const useUserData = () => ({ name: 'User', location: 'Parque Patricios, Bs. As.' });
 
-const barrios = ['Todos los barrios', 'Flores', 'Recoleta', 'Devoto', 'Palermo', 'Belgrano', 'Caballito'];
-
 const LocationHeader = ({ name, location, onMenu }) => (
   <View style={styles.headerRow}>
     <View style={styles.profilePic}>
@@ -71,7 +69,7 @@ const PopupCard = ({ popup, onPress, onFavorite }) => (
   <View style={styles.popupCard}>
     <Image source={{ uri: popup.imagen }} style={styles.popupImage} />
     <Text style={styles.popupName}>{popup.nombre}</Text>
-    <Text style={styles.popupAddress}>{popup.direccion}</Text>
+    <Text style={styles.popupAddress}>{popup.ubicacion}</Text>
     <View style={styles.popupCardFooter}>
       <TouchableOpacity style={styles.verMasButton} onPress={onPress}>
         <Text style={styles.verMasText}>Ver más</Text>
@@ -113,26 +111,52 @@ const HomeScreen = () => {
   const navigation = useNavigation();
   const { name, location } = useUserData();
   const [search, setSearch] = useState('');
-  const [selectedBarrio, setSelectedBarrio] = useState(barrios[0]);
-  const [popups, setPopups] = useState([]);
+  const [barriosData, setBarriosData] = useState([]); // Estado para los barrios
+  const [barrios, setBarrios] = useState(['Todos los barrios']); // Chips dinámicos
+  const [selectedBarrio, setSelectedBarrio] = useState('Todos los barrios');
+  const [popup, setPopups] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Obtener los barrios al inicio y poblar chips
+  useEffect(() => {
+    const fetchBarrios = async () => {
+      const { data, error } = await supabase.from('barrio').select('*');
+      if (error) {
+        console.log('Error al obtener barrios:', error.message);
+        setBarriosData([]);
+        setBarrios(['Todos los barrios']);
+      } else {
+        setBarriosData(data || []);
+        setBarrios(['Todos los barrios', ...(data || []).map(b => b.nombre)]);
+      }
+    };
+    fetchBarrios();
+  }, []);
 
   const fetchPopups = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('popups').select('*');
+    let query = supabase.from('popup').select('*');
     if (selectedBarrio !== 'Todos los barrios') {
-      query = query.eq('barrio', selectedBarrio);
+      // Buscar el id del barrio seleccionado
+      const barrioObj = barriosData.find(b => b.nombre === selectedBarrio);
+      if (barrioObj && barrioObj.idbarrio) {
+        query = query.eq('idBarrio', barrioObj.idbarrio);
+      } else {
+        setPopups([]);
+        setLoading(false);
+        return;
+      }
     }
     const { data, error } = await query;
     if (error) {
-      console.log('Error fetching popups:', error.message);
+      console.log('Error fetching popup:', error.message);
       setPopups([]);
     } else {
-      console.log('Popups recibidos:', data);
       setPopups(data || []);
+      console.log('popup recibidos:', data);
     }
     setLoading(false);
-  }, [selectedBarrio]);
+  }, [selectedBarrio, barriosData]);
 
   useEffect(() => {
     fetchPopups();
@@ -140,9 +164,18 @@ const HomeScreen = () => {
 
   const handleFavorite = async (popup) => {
     const updated = !popup.isFavorite;
-    setPopups((prev) => prev.map(p => p.id === popup.id ? { ...p, isFavorite: updated } : p));
-    await supabase.from('popups').update({ isFavorite: updated }).eq('id', popup.id);
+    setPopups((prev) => prev.map(p => p.idpopup === popup.idpopup ? { ...p, isFavorite: updated } : p));
+    await supabase.from('popup').update({ isFavorite: updated }).eq('idpopup', popup.idpopup);
   };
+
+  // DEBUG LOGS para depuración en tiempo real
+  console.log('barriosData', barriosData);
+  console.log('barrios', barrios);
+  console.log('selectedBarrio', selectedBarrio);
+  console.log('popup', popup);
+
+  // Chips de barrios: fallback si no hay datos
+  const chipsToShow = barrios.length > 1 ? barrios : ['Todos los barrios', 'Flores', 'Palermo', 'Recoleta'];
 
   return (
     <SafeAreaProvider>
@@ -150,7 +183,7 @@ const HomeScreen = () => {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
           <LocationHeader name={name} location={location} onMenu={() => {}} />
           <SearchBar value={search} onChange={setSearch} onFilter={() => {}} />
-          <FilterChips chips={barrios} selected={selectedBarrio} onSelect={setSelectedBarrio} />
+          <FilterChips chips={chipsToShow} selected={selectedBarrio} onSelect={setSelectedBarrio} />
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recomendado para vos</Text>
             <TouchableOpacity onPress={() => {}}>
@@ -159,16 +192,16 @@ const HomeScreen = () => {
           </View>
           {loading ? (
             <Text style={{ textAlign: 'center', marginTop: 20 }}>Cargando...</Text>
-          ) : popups.length === 0 ? (
+          ) : popup.length === 0 ? (
             <Text style={{ textAlign: 'center', marginTop: 20 }}>No hay pop-ups disponibles 😢</Text>
           ) : (
             <FlatList
-              data={popups}
+              data={popup}
               horizontal
               showsHorizontalScrollIndicator={false}
-              keyExtractor={item => item.id?.toString() || item.nombre}
+              keyExtractor={item => item.idpopup?.toString()}
               renderItem={({ item }) =>
-                item.nombre && item.direccion && item.imagen ? (
+                item.nombre && item.imagen ? (
                   <PopupCard
                     popup={item}
                     onPress={() => navigation.navigate('PopupDetailScreen', { popup: item })}

@@ -120,14 +120,28 @@ const HomeScreen = () => {
   // Obtener los barrios al inicio y poblar chips
   useEffect(() => {
     const fetchBarrios = async () => {
-      const { data, error } = await supabase.from('barrio').select('*');
-      if (error) {
-        console.log('Error al obtener barrios:', error.message);
+      try {
+        const { data, error } = await supabase.from('barrio').select('*');
+        if (error) {
+          console.error('Error al obtener barrios:', error.message, JSON.stringify(error));
+          setBarriosData([]);
+          setBarrios(['Todos los barrios']);
+          // Si quieres mostrar un mensaje al usuario, puedes usar un estado extra:
+          // setErrorBarrios('No se pudieron cargar los barrios. Intenta más tarde.');
+        } else if (!data || !Array.isArray(data) || data.length === 0) {
+          console.warn('No se recibieron datos de barrios o el array está vacío:', data);
+          setBarriosData([]);
+          setBarrios(['Todos los barrios']);
+        } else {
+          setBarriosData(data);
+          setBarrios(['Todos los barrios', ...(data || []).map(b => b.nombrebarrio)]);
+          console.log('Barrios recibidos:', data);
+        }
+      } catch (err) {
+        console.error('Excepción al obtener barrios:', err.message, JSON.stringify(err));
         setBarriosData([]);
         setBarrios(['Todos los barrios']);
-      } else {
-        setBarriosData(data || []);
-        setBarrios(['Todos los barrios', ...(data || []).map(b => b.nombre)]);
+        // setErrorBarrios('No se pudieron cargar los barrios. Intenta más tarde.');
       }
     };
     fetchBarrios();
@@ -136,24 +150,31 @@ const HomeScreen = () => {
   const fetchPopups = useCallback(async () => {
     setLoading(true);
     let query = supabase.from('popup').select('*');
+
     if (selectedBarrio !== 'Todos los barrios') {
-      // Buscar el id del barrio seleccionado
-      const barrioObj = barriosData.find(b => b.nombre === selectedBarrio);
-      if (barrioObj && barrioObj.idbarrio) {
-        query = query.eq('idBarrio', barrioObj.idbarrio);
+      const barrioObj = barriosData.find(b => b.nombrebarrio === selectedBarrio);
+      console.log('Filtrando por barrio seleccionado:', selectedBarrio);
+      console.log('Objeto barrio encontrado:', barrioObj);
+
+      if (barrioObj && typeof barrioObj.idbarrio === 'number') {
+        query = query.eq('idbarrio', barrioObj.idbarrio);
       } else {
+        console.warn('No se encontró id válido para el barrio');
         setPopups([]);
         setLoading(false);
         return;
       }
     }
-    const { data, error } = await query;
-    if (error) {
-      console.log('Error fetching popup:', error.message);
+
+    const { data: popup, error: popupError } = await query;
+    console.log('popup:', popup);
+    console.log('popupError:', popupError);
+    if (popupError) {
+      console.error('Error fetching popup:', popupError.message);
       setPopups([]);
     } else {
-      setPopups(data || []);
-      console.log('popup recibidos:', data);
+      console.log('Popups recibidos del backend:', popup);
+      setPopups(popup || []);
     }
     setLoading(false);
   }, [selectedBarrio, barriosData]);

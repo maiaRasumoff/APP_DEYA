@@ -1,91 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
-  SafeAreaView,
-  Alert,
-  ActivityIndicator,
-  FlatList,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import supabase from './lib/supabase';
+import { SafeAreaView } from 'react-native';
 
-const RegisterScreen = ({ navigation }) => {
+const RegisterScreen = () => {
+  const navigation = useNavigation();
   const [email, setEmail] = useState('');
+  const [nombre, setNombre] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [testData, setTestData] = useState([]);
-  const [loadingData, setLoadingData] = useState(true);
-
-  // 🔍 Verifica conexión con Supabase y muestra datos
-  useEffect(() => {
-    const fetchTestData = async () => {
-      const { data, error } = await supabase.from('usuario').select('*');
-      if (error) {
-        console.error('Error al cargar datos:', error.message);
-      } else {
-        setTestData(data);
-      }
-      setLoadingData(false);
-    };
-    fetchTestData();
-  }, []);
 
   const handleRegister = async () => {
     const emailTrimmed = email.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  
-    if (!emailTrimmed || !password) {
-      Alert.alert('Error', 'Por favor completa todos los campos.');
+    const nombreTrimmed = nombre.trim();
+    const passwordTrimmed = password.trim();
+
+    // Validaciones básicas
+    if (!emailTrimmed) {
+      Alert.alert('Error', 'Por favor ingresa tu email.');
       return;
     }
-  
-    if (!emailRegex.test(emailTrimmed)) {
-      Alert.alert('Error', 'El email ingresado no es válido.');
+
+    if (!nombreTrimmed) {
+      Alert.alert('Error', 'Por favor ingresa tu nombre.');
       return;
     }
-  
+
+    if (!passwordTrimmed) {
+      Alert.alert('Error', 'Por favor ingresa tu contraseña.');
+      return;
+    }
+
+    if (passwordTrimmed.length < 6) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
     setLoading(true);
-  
     try {
-      // 1. Crear usuario en Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
-        email: emailTrimmed,
-        password: password,
-      });
-  
-      if (error) throw error;
-  
-      // 2. Obtener el ID del nuevo usuario
-      const userId = data.user?.id;
-      if (!userId) throw new Error("No se pudo obtener el ID del usuario");
-  
-      // 3. Insertar datos personalizados en tabla "usuario"
-      const { error: dbError } = await supabase.from('usuario').insert([
-        {
-          mail: emailTrimmed,
-          // Agregá aquí más campos si los pedís en el formulario (nombreUser, idEstilo, etc.)
-        },
-      ]);
-  
-      if (dbError) throw dbError;
-  
-      Alert.alert('¡Registro exitoso!', 'Revisa tu correo para confirmar tu cuenta.');
-      navigation.replace('Home');
+      // Verificar si el email ya existe
+      const { data: existingUser, error: checkError } = await supabase
+        .from('usuario')
+        .select('email')
+        .eq('email', emailTrimmed)
+        .maybeSingle();
+
+      if (checkError) {
+        console.log('Error verificando email:', checkError);
+        Alert.alert('Error', 'Error de conexión. Intenta nuevamente.');
+        return;
+      }
+
+      if (existingUser) {
+        Alert.alert('Error', 'Este email ya está registrado.');
+        return;
+      }
+
+      // Insertar nuevo usuario en la tabla usuario
+      const { data, error } = await supabase
+        .from('usuario')
+        .insert([{
+          nombreuser: nombreTrimmed,
+          email: emailTrimmed,
+          contrasenia: passwordTrimmed
+        }])
+        .select();
+
+      if (error) {
+        console.log('Error insertando usuario:', error);
+        Alert.alert('Error', 'No se pudo registrar el usuario. Intenta nuevamente.');
+        return;
+      }
+
+      console.log('Usuario registrado:', data);
+      Alert.alert('Éxito', 'Registro exitoso. Ya puedes iniciar sesión.');
+      navigation.replace('Login');
+      
     } catch (err) {
-      console.error('Registro fallido:', err.message);
-      Alert.alert('Error', err.message || 'Error al registrar');
+      console.log('Error en registro:', err);
+      Alert.alert('Error', 'Error de conexión. Intenta nuevamente.');
     } finally {
       setLoading(false);
     }
   };
-  
-  
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -102,6 +102,16 @@ const RegisterScreen = ({ navigation }) => {
       {/* Contenedor tipo tarjeta */}
       <View style={styles.card}>
         <Text style={styles.title}>Crea tu cuenta</Text>
+        
+        <TextInput
+          style={styles.input}
+          placeholder="Nombre"
+          placeholderTextColor="#aaa"
+          value={nombre}
+          onChangeText={setNombre}
+          autoCapitalize="words"
+        />
+
         <TextInput
           style={styles.input}
           placeholder="Email"
@@ -145,22 +155,6 @@ const RegisterScreen = ({ navigation }) => {
           <TouchableOpacity style={styles.socialButton}>
             <Image source={require('./assets/Facebook_Logo.png')} style={styles.socialIcon} />
           </TouchableOpacity>
-        </View>
-
-        {/* 🔍 Verificación conexión a Supabase */}
-        <View style={{ marginTop: 10, marginBottom: 20 }}>
-          <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 4 }}>Datos desde Supabase:</Text>
-          {loadingData ? (
-            <ActivityIndicator size="small" color="#000" />
-          ) : (
-            <FlatList
-              data={testData}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={({ item }) => (
-                <Text style={{ fontSize: 12, marginBottom: 4 }}>{JSON.stringify(item)}</Text>
-              )}
-            />
-          )}
         </View>
 
         {/* Botón registrarse */}

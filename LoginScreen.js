@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,47 +11,49 @@ const LoginScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        navigation.replace('Home');
-      }
-    };
-    checkSession();
-  }, [navigation]);
-
   const handleLogin = async () => {
     const emailTrimmed = email.trim().toLowerCase();
-    if (!emailTrimmed || !password) {
-      Alert.alert('Error', 'Por favor completa todos los campos.');
+    const passwordTrimmed = password.trim();
+    
+    // Validaciones básicas
+    if (!emailTrimmed) {
+      Alert.alert('Error', 'Por favor ingresa tu email.');
       return;
     }
+    
+    if (!passwordTrimmed) {
+      Alert.alert('Error', 'Por favor ingresa tu contraseña.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: emailTrimmed,
-        password,
-      });
-      if (error) throw error;
-
-      // Buscar info adicional del usuario en la tabla Usuario
-      const { data: userData, error: userError } = await supabase
+      // Consultar directamente en la tabla usuario
+      const { data, error } = await supabase
         .from('usuario')
         .select('*')
-        .eq('mail', emailTrimmed)
-        .single();
+        .eq('email', emailTrimmed)
+        .eq('contrasenia', passwordTrimmed)
+        .maybeSingle();
 
-      if (userError) throw userError;
+      if (error) {
+        console.log('Error en consulta:', error);
+        Alert.alert('Error', 'Error de conexión. Intenta nuevamente.');
+        return;
+      }
 
-      // Podés guardar userData en contexto, AsyncStorage o lo que necesites
-      console.log('usuario extra:', userData);
+      if (!data) {
+        Alert.alert('Error', 'Email o contraseña incorrectos.');
+        return;
+      }
 
+      console.log('Usuario autenticado:', data);
+      Alert.alert('Éxito', `Bienvenido ${data.nombreuser}!`);
       navigation.replace('Home');
       
     } catch (err) {
-      console.log(err);
-      Alert.alert('Error', 'usuario o contraseña incorrectos o no se pudo recuperar los datos.');
+      console.log('Error en login:', err);
+      Alert.alert('Error', 'Error de conexión. Intenta nuevamente.');
     } finally {
       setLoading(false);
     }
